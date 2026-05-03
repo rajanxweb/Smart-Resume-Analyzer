@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Resume Analyzer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+        /* --- Dynamic Theme Variables --- */
+        :root {
+            --bg-dark: #0a0a0c;
+            --surface: #141417;
+            --surface-border: #26262a;
+            --text-primary: #ffffff;
+            --text-secondary: #8b8b93;
+            
+            /* Default Accent (Pre-upload) */
+            --accent: #3b82f6; 
+            --accent-glow: rgba(59, 130, 246, 0.2);
+            --accent-bg: rgba(59, 130, 246, 0.1);
+        }
+
+        /* State-based Theme Overrides applied via Jinja */
+        body.theme-excellent {
+            --accent: #10b981; --accent-glow: rgba(16, 185, 129, 0.2); --accent-bg: rgba(16, 185, 129, 0.1);
+        }
+        body.theme-average {
+            --accent: #f59e0b; --accent-glow: rgba(245, 158, 11, 0.2); --accent-bg: rgba(245, 158, 11, 0.1);
+        }
+        body.theme-poor {
+            --accent: #ef4444; --accent-glow: rgba(239, 68, 68, 0.2); --accent-bg: rgba(239, 68, 68, 0.1);
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: radial-gradient(circle at 50% 0%, var(--accent-glow) 0%, transparent 50%);
+            transition: background-image 0.8s ease;
+        }
+
+        /* --- Typography & Branding --- */
+        h1, h2, h3, h4 { margin: 0; }
+        .brand-title {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #fff, var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .brand-subtitle { font-size: 1.1rem; color: var(--text-secondary); font-weight: 500; }
+
+        /* --- Card Architecture (Separation & Alignment) --- */
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        /* --- PHASE 1: Upload View --- */
+        .upload-container {
+            margin-top: 10vh;
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .form-layout { display: flex; flex-direction: column; gap: 24px; margin-top: 40px; text-align: left; }
+        
+        label { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); font-weight: 700; margin-bottom: 8px; display: block; }
+        
+        select {
+            width: 100%; padding: 16px; border-radius: 12px; background: var(--bg-dark);
+            border: 1px solid var(--surface-border); color: white; font-family: inherit; font-size: 1rem;
+            outline: none; transition: border 0.3s; cursor: pointer;
+        }
+        select:focus { border-color: var(--accent); }
+
+        .drop-zone {
+            border: 2px dashed var(--surface-border); border-radius: 16px; padding: 40px 20px;
+            text-align: center; transition: all 0.3s; cursor: pointer; background: var(--bg-dark);
+            position: relative; overflow: hidden;
+        }
+        .drop-zone:hover { border-color: var(--accent); background: var(--accent-bg); }
+        .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        .file-name { font-family: 'Space Mono', monospace; font-size: 0.9rem; color: var(--accent); margin-top: 10px; display: block; }
+
+        .btn-primary {
+            background-color: var(--accent); color: white; border: none; border-radius: 12px;
+            padding: 18px; font-size: 1.1rem; font-weight: 700; font-family: inherit; cursor: pointer;
+            transition: all 0.3s; width: 100%; box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .btn-primary:hover { transform: translateY(-2px); filter: brightness(1.1); box-shadow: 0 8px 25px var(--accent-glow); }
+
+        /* --- PHASE 2: Results Dashboard --- */
+        .dashboard-container {
+            width: 100%; max-width: 1100px; margin: 40px auto; padding: 0 20px;
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .role-tag { background: var(--accent-bg); color: var(--accent); padding: 8px 16px; border-radius: 30px; font-weight: 600; font-size: 0.9rem; border: 1px solid var(--accent); }
+        
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 30px; }
+        @media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+        /* Score Section */
+        .score-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .score-ring {
+            width: 160px; height: 160px; border-radius: 50%; border: 6px solid var(--accent);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: 0 0 40px var(--accent-glow); margin-bottom: 20px; background: var(--bg-dark);
+        }
+        .score-val { font-size: 4rem; font-weight: 800; line-height: 1; color: var(--text-primary); }
+        .score-sub { font-size: 1rem; color: var(--text-secondary); font-weight: 600; }
+
+        /* Skills Section */
+        .skills-card { display: flex; flex-direction: column; gap: 30px; }
+        .skill-group h3 { font-size: 1.1rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; }
+        
+        .pill-container { display: flex; flex-wrap: wrap; gap: 10px; }
+        .pill { 
+            padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+            font-family: 'Space Mono', monospace; border: 1px solid var(--surface-border);
+        }
+        .pill.found { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.3); }
+        .pill.missing { background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+
+        /* Suggestion Section */
+        .ai-insight {
+            grid-column: 1 / -1; background: var(--accent-bg); border-left: 4px solid var(--accent);
+            padding: 24px; border-radius: 0 16px 16px 0; display: flex; align-items: center; gap: 20px;
+        }
+        .insight-icon { font-size: 2rem; }
+        .insight-text h4 { color: var(--accent); margin-bottom: 5px; font-size: 1.1rem; }
+        .insight-text p { margin: 0; color: var(--text-primary); line-height: 1.6; }
+
+        .btn-secondary {
+            background: transparent; border: 1px solid var(--surface-border); color: var(--text-secondary);
+            padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s;
+            text-decoration: none; display: inline-block;
+        }
+        .btn-secondary:hover { color: white; border-color: white; background: var(--surface); }
+
+        .error-toast { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #fca5a5; padding: 16px; border-radius: 12px; margin-bottom: 24px; text-align: left; }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+
+    </style>
+</head>
+
+<!-- Body class dynamically changes based on score, altering all CSS variables globally -->
+<body class="{% if results %}{% if results.score >= 70 %}theme-excellent{% elif results.score >= 40 %}theme-average{% else %}theme-poor{% endif %}{% endif %}">
+
+    {% if not results %}
+    <!-- ==========================================
+         PHASE 1: THE UPLOAD GATEWAY
+         ========================================== -->
+    <div class="upload-container">
+        <h1 class="brand-title">Smart Resume Analyzer</h1>
+        <p class="brand-subtitle">Upload your document to instantly benchmark your tech stack.</p>
+
+        <div class="card form-layout">
+            {% if error %}
+                <div class="error-toast"><strong>System Error:</strong> {{ error }}</div>
+            {% endif %}
+
+            <form action="/scan" method="post" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 24px;">
+                
+                <div>
+                    <label>1. Select Target Profile</label>
+                    <select name="role" required>
+                        {% for key, title in job_roles.items() %}
+                            <option value="{{ key }}">{{ title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>2. Upload Document (PDF)</label>
+                    <div class="drop-zone">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 10px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                        <div style="color: var(--text-primary); font-weight: 600;">Drag & Drop or Click to Browse</div>
+                        <span class="file-name" id="file-name-display">No file selected</span>
+                        <input type="file" name="file" accept="application/pdf" required onchange="document.getElementById('file-name-display').innerText = this.files[0].name">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary">Initialize Analysis</button>
+            </form>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- ==========================================
+         PHASE 2: THE ANALYTICS DASHBOARD
+         ========================================== -->
+    <div class="dashboard-container">
+        
+        <div class="dashboard-header">
+            <div>
+                <h2 style="font-size: 1.8rem;">Intelligence Report</h2>
+                <div style="color: var(--text-secondary); margin-top: 4px;">Smart Resume Analyzer</div>
+            </div>
+            <div style="display: flex; gap: 16px; align-items: center;">
+                <span class="role-tag">{{ results.role_name }}</span>
+                <a href="/" class="btn-secondary">New Scan</a>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            
+            <!-- Left Column: The Score Alignment -->
+            <div class="card score-card">
+                <div class="score-ring">
+                    <span class="score-val">{{ results.score }}</span>
+                    <span class="score-sub">/ 100</span>
+                </div>
+                <h3 style="margin-bottom: 8px;">Match Rating</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0;">Calculated against core industry requirements for this role.</p>
+            </div>
+
+            <!-- Right Column: Skills Separation -->
+            <div class="card skills-card">
+                
+                <div class="skill-group">
+                    <h3 style="color: #10b981;"><span>Verified Competencies</span> <span>{{ results.matched_skills|length }}</span></h3>
+                    <div class="pill-container">
+                        {% for skill in results.matched_skills %}
+                            <div class="pill found">{{ skill }}</div>
+                        {% else %}
+                            <div style="color: var(--text-secondary); font-size: 0.9rem; font-style: italic;">No required technical skills found in document.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="skill-group" style="margin-top: 10px;">
+                    <h3 style="color: #ef4444;"><span>Skill Gaps Identified</span> <span>{{ results.missing_skills|length }}</span></h3>
+                    <div class="pill-container">
+                        {% for skill in results.missing_skills %}
+                            <div class="pill missing">{{ skill }}</div>
+                        {% else %}
+                            <div style="color: #10b981; font-size: 0.9rem; font-weight: 600;">Excellent! No major skill gaps detected.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Bottom Row: AI Insights -->
+            <div class="ai-insight">
+                <div class="insight-icon">💡</div>
+                <div class="insight-text">
+                    <h4>Actionable Intelligence</h4>
+                    <p>{{ results.suggestion }}</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    {% endif %}
+
+</body>
+</html>
